@@ -48,6 +48,7 @@ export default function VoidChat() {
   const lastMessageTimestampRef = useRef<string | null>(null);
   const processedMessageIds = useRef(new Set<string>());
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const fetchVoid = useCallback(async () => {
     if (!params.id) return null;
@@ -139,7 +140,7 @@ export default function VoidChat() {
       const channel = supabase.channel('void_messages');
       channel.unsubscribe();
     };
-  }, [fetchMessages, fetchUsers, fetchVoid]);
+  }, [initializeVoid]);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {

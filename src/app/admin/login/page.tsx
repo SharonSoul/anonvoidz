@@ -18,6 +18,7 @@ export default function AdminLogin() {
     if (adminSession) {
       router.push('/admin/dashboard');
     }
+    setIsPageLoading(false);
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {

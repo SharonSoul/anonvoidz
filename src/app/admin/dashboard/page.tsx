@@ -25,17 +25,6 @@ export default function AdminDashboard() {
   const [isDeletingMedia, setIsDeletingMedia] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
 
-  useEffect(() => {
-    // Check admin session
-    const adminSession = localStorage.getItem('admin_session');
-    if (!adminSession) {
-      router.push('/admin/login');
-      return;
-    }
-
-    fetchStats();
-  }, [router]);
-
   const fetchStats = async () => {
     try {
       setLoading(true);
@@ -84,6 +73,17 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Check admin session
+    const adminSession = localStorage.getItem('admin_session');
+    if (!adminSession) {
+      router.push('/admin/login');
+      return;
+    }
+
+    fetchStats();
+  }, [router]);
 
   const handleDeleteMessages = async () => {
     if (!confirm('Are you sure you want to delete all messages? This cannot be undone.')) return;
