@@ -11,8 +11,9 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
   const [activeVoids, setActiveVoids] = useState<Void[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [loading, setLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
+  const [voidName, setVoidName] = useState('');
+  const [userCap, setUserCap] = useState(50);
 
   useEffect(() => {
     setIsClient(true);
@@ -45,8 +46,8 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: 'New Void',
-          user_cap: 50,
+          name: voidName.trim(),
+          user_cap: userCap,
         }),
       });
 
@@ -107,13 +108,48 @@ export default function Home() {
             <p className="text-gray-300 mb-6">
               Create a new void for anonymous chat. Each void has a unique access code and can be joined by anyone with the link.
             </p>
-            <button
-              onClick={handleCreateVoid}
-              disabled={isCreating}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg"
-            >
-              {isCreating ? 'Creating Void...' : 'Create New Void'}
-            </button>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="voidName" className="block text-sm font-medium mb-2">
+                  Void Name
+                </label>
+                <input
+                  type="text"
+                  id="voidName"
+                  required
+                  className="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600"
+                  value={voidName}
+                  onChange={(e) => setVoidName(e.target.value)}
+                  placeholder="Enter void name"
+                  maxLength={50}
+                />
+              </div>
+              <div>
+                <label htmlFor="userCap" className="block text-sm font-medium mb-2">
+                  User Cap
+                </label>
+                <input
+                  type="number"
+                  id="userCap"
+                  required
+                  min="2"
+                  max="50"
+                  className="w-full px-4 py-2 rounded-lg bg-gray-700 border border-gray-600"
+                  value={userCap}
+                  onChange={(e) => setUserCap(parseInt(e.target.value))}
+                />
+                <p className="text-sm text-gray-400 mt-1">
+                  Maximum number of users allowed in the void (2-50)
+                </p>
+              </div>
+              <button
+                onClick={handleCreateVoid}
+                disabled={isCreating || !voidName.trim()}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg disabled:opacity-50"
+              >
+                {isCreating ? 'Creating Void...' : 'Create New Void'}
+              </button>
+            </div>
           </div>
 
           <div className="bg-gray-800 rounded-lg p-6 mb-8">

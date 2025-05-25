@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { Message, Void, VoidUser } from '@/lib/supabase';
@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PhotoIcon, VideoCameraIcon, TrashIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import MediaUpload from '@/components/MediaUpload';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const getUserColor = (userId: string) => {
   const colors = [
@@ -31,111 +32,115 @@ const getUserColor = (userId: string) => {
 export default function VoidChat() {
   const params = useParams();
   const router = useRouter();
-  const [void_, setVoid] = useState<Void | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [users, setUsers] = useState<VoidUser[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [currentUser, setCurrentUser] = useState<VoidUser | null>(null);
+  const [void_, setVoid] = useState<Void | null>(null);
+  const [users, setUsers] = useState<VoidUser[]>([]);
+  const [showMediaUpload, setShowMediaUpload] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showJoinModal, setShowJoinModal] = useState(true);
-  const [nickname, setNickname] = useState('');
-  const [currentUser, setCurrentUser] = useState<VoidUser | null>(null);
-  const [showMediaUpload, setShowMediaUpload] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [nickname, setNickname] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [fileInputRef, setFileInputRef] = useState<React.RefObject<HTMLInputElement> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const lastMessageTimestampRef = useRef<string>('1970-01-01');
+  const lastMessageTimestampRef = useRef<string | null>(null);
   const processedMessageIds = useRef(new Set<string>());
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
+
+  const fetchVoid = useCallback(async () => {
+    if (!params.id) return null;
+    try {
+      const { data, error } = await supabase
+        .from('voids')
+        .select('*')
+        .eq('id', params.id)
+        .single();
+
+      if (error) throw error;
+      setVoid(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching void:', error);
+      router.push('/');
+      return null;
+    }
+  }, [params.id, router]);
+
+  const fetchMessages = useCallback(async () => {
+    if (!params.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*, void_users(*)')
+        .eq('void_id', params.id)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  }, [params.id]);
+
+  const fetchUsers = useCallback(async () => {
+    if (!params.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('void_users')
+        .select('*')
+        .eq('void_id', params.id);
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  }, [params.id]);
+
+  const initializeVoid = useCallback(async () => {
+    try {
+      const voidData = await fetchVoid();
+      if (voidData) {
+        // Check for existing user session
+        const savedUser = localStorage.getItem(`void_user_${params.id}`);
+        if (savedUser) {
+          const userData = JSON.parse(savedUser);
+          // Verify user still exists in the void
+          const { data: user, error } = await supabase
+            .from('void_users')
+            .select('*')
+            .eq('id', userData.id)
+            .single();
+
+          if (user && !error) {
+            setCurrentUser(user);
+            setShowJoinModal(false);
+          } else {
+            // If user doesn't exist anymore, clear the saved session
+            localStorage.removeItem(`void_user_${params.id}`);
+          }
+        }
+        await Promise.all([fetchMessages(), fetchUsers()]);
+      }
+    } catch (error) {
+      console.error('Error initializing void:', error);
+      toast.error('Failed to load Void');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchVoid, fetchMessages, fetchUsers, params.id]);
 
   useEffect(() => {
-    const initializeVoid = async () => {
-      try {
-        const voidData = await fetchVoid();
-        if (voidData) {
-          // Check for existing user session
-          const savedUser = localStorage.getItem(`void_user_${params.id}`);
-          if (savedUser) {
-            const userData = JSON.parse(savedUser);
-            // Verify user still exists in the void
-            const { data: user, error } = await supabase
-              .from('void_users')
-              .select('*')
-              .eq('id', userData.id)
-              .single();
-
-            if (user && !error) {
-              setCurrentUser(user);
-              setShowJoinModal(false);
-            } else {
-              // If user doesn't exist anymore, clear the saved session
-              localStorage.removeItem(`void_user_${params.id}`);
-            }
-          }
-          await Promise.all([fetchMessages(), fetchUsers()]);
-        }
-      } catch (error) {
-        console.error('Error initializing void:', error);
-        toast.error('Failed to load Void');
-        router.push('/');
-      }
-    };
-
     initializeVoid();
-
-    // Set up a simple polling mechanism to check for new messages
-    const pollInterval = setInterval(async () => {
-      if (!params.id) return; // Don't poll if we don't have a void ID
-
-      try {
-        const { data: newMessages, error } = await supabase
-          .from('messages')
-          .select('*, void_users(*)')
-          .eq('void_id', params.id)
-          .gt('created_at', lastMessageTimestampRef.current)
-          .order('created_at', { ascending: true });
-
-        if (error) {
-          console.error('Error polling messages:', error);
-          return;
-        }
-
-        if (newMessages && newMessages.length > 0) {
-          // Filter out messages we've already processed
-          const uniqueNewMessages = newMessages.filter(msg => !processedMessageIds.current.has(msg.id));
-          
-          if (uniqueNewMessages.length > 0) {
-            setMessages(prev => {
-              // Create a map of existing messages by ID
-              const existingMessages = new Map(prev.map(msg => [msg.id, msg]));
-              
-              // Add new messages that don't exist in the map
-              uniqueNewMessages.forEach(msg => {
-                if (!existingMessages.has(msg.id)) {
-                  existingMessages.set(msg.id, msg);
-                }
-              });
-              
-              // Convert map back to array and sort by created_at
-              return Array.from(existingMessages.values())
-                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-            });
-            
-            // Add new message IDs to our processed set
-            uniqueNewMessages.forEach(msg => processedMessageIds.current.add(msg.id));
-            lastMessageTimestampRef.current = newMessages[newMessages.length - 1].created_at;
-          }
-        }
-      } catch (error) {
-        console.error('Error in polling interval:', error);
-      }
-    }, 1000); // Poll every second
-
     return () => {
-      clearInterval(pollInterval);
+      // Cleanup subscriptions
+      const channel = supabase.channel('void_messages');
+      channel.unsubscribe();
     };
-  }, [params.id]);
+  }, [fetchMessages, fetchUsers, fetchVoid]);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -152,66 +157,6 @@ export default function VoidChat() {
 
     fetchCurrentUser();
   }, []);
-
-  const fetchVoid = async () => {
-    try {
-      const { data: void_, error } = await supabase
-        .from('voids')
-        .select('*')
-        .eq('id', params.id)
-        .single();
-
-      if (error) throw error;
-      setVoid(void_);
-      setLoading(false);
-      return void_;
-    } catch (error) {
-      console.error('Error fetching void:', error);
-      throw error;
-    }
-  };
-
-  const fetchMessages = async () => {
-    if (!params.id) return;
-
-    try {
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('void_id', params.id)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      
-      // Initialize the processed message IDs set with existing messages
-      messages?.forEach(msg => processedMessageIds.current.add(msg.id));
-      
-      setMessages(messages || []);
-      if (messages && messages.length > 0) {
-        lastMessageTimestampRef.current = messages[messages.length - 1].created_at;
-      }
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      toast.error('Failed to load messages');
-    }
-  };
-
-  const fetchUsers = async () => {
-    if (!params.id) return;
-
-    try {
-      const { data: users, error } = await supabase
-        .from('void_users')
-        .select('*')
-        .eq('void_id', params.id);
-
-      if (error) throw error;
-      setUsers(users || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      toast.error('Failed to load users');
-    }
-  };
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -319,7 +264,7 @@ export default function VoidChat() {
     if (!file || !currentUser) return;
     
     try {
-      setUploading(true);
+      setIsUploading(true);
       setUploadError(null);
 
       // Generate a unique file name
@@ -394,7 +339,7 @@ export default function VoidChat() {
       setUploadError(error instanceof Error ? error.message : 'Failed to upload media');
       toast.error('Failed to upload media. Please try again.');
     } finally {
-      setUploading(false);
+      setIsUploading(false);
     }
   };
 
@@ -658,9 +603,11 @@ export default function VoidChat() {
                   >
                     {message.media_url ? (
                       message.media_type === 'image' ? (
-                        <img
+                        <Image
                           src={supabase.storage.from('void-media').getPublicUrl(message.media_url).data.publicUrl}
                           alt="Shared image"
+                          width={400}
+                          height={300}
                           className="max-w-full h-auto rounded-lg"
                           onError={(e) => {
                             console.error('Image load error:', e);
