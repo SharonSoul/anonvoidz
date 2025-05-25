@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
@@ -25,7 +25,7 @@ export default function AdminDashboard() {
   const [isDeletingMedia, setIsDeletingMedia] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -72,7 +72,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Check admin session
@@ -83,7 +83,7 @@ export default function AdminDashboard() {
     }
 
     fetchStats();
-  }, [router]);
+  }, [router, fetchStats]);
 
   const handleDeleteMessages = async () => {
     if (!confirm('Are you sure you want to delete all messages? This cannot be undone.')) return;
