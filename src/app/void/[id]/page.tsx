@@ -11,6 +11,23 @@ import { PhotoIcon, VideoCameraIcon, TrashIcon, ArrowLeftIcon } from '@heroicons
 import MediaUpload from '@/components/MediaUpload';
 import Link from 'next/link';
 
+const getUserColor = (userId: string) => {
+  const colors = [
+    'bg-purple-600',
+    'bg-blue-600',
+    'bg-green-600',
+    'bg-pink-600',
+    'bg-indigo-600',
+    'bg-teal-600',
+    'bg-orange-600',
+    'bg-cyan-600',
+    'bg-rose-600',
+    'bg-violet-600',
+  ];
+  const index = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+  return colors[index];
+};
+
 export default function VoidChat() {
   const params = useParams();
   const router = useRouter();
@@ -69,29 +86,49 @@ export default function VoidChat() {
 
     // Set up a simple polling mechanism to check for new messages
     const pollInterval = setInterval(async () => {
-      const { data: newMessages, error } = await supabase
-        .from('messages')
-        .select('*, void_users(*)')
-        .eq('void_id', params.id)
-        .gt('created_at', lastMessageTimestampRef.current)
-        .order('created_at', { ascending: true });
+      if (!params.id) return; // Don't poll if we don't have a void ID
 
-      if (error) {
-        console.error('Error polling messages:', error);
-        return;
-      }
+      try {
+        const { data: newMessages, error } = await supabase
+          .from('messages')
+          .select('*, void_users(*)')
+          .eq('void_id', params.id)
+          .gt('created_at', lastMessageTimestampRef.current)
+          .order('created_at', { ascending: true });
 
-      if (newMessages && newMessages.length > 0) {
-        // Filter out messages we've already processed
-        const uniqueNewMessages = newMessages.filter(msg => !processedMessageIds.current.has(msg.id));
-        
-        if (uniqueNewMessages.length > 0) {
-          setMessages(prev => [...prev, ...uniqueNewMessages]);
-          // Add new message IDs to our processed set
-          uniqueNewMessages.forEach(msg => processedMessageIds.current.add(msg.id));
-          lastMessageTimestampRef.current = newMessages[newMessages.length - 1].created_at;
-          // Remove auto-scroll for new messages from other users
+        if (error) {
+          console.error('Error polling messages:', error);
+          return;
         }
+
+        if (newMessages && newMessages.length > 0) {
+          // Filter out messages we've already processed
+          const uniqueNewMessages = newMessages.filter(msg => !processedMessageIds.current.has(msg.id));
+          
+          if (uniqueNewMessages.length > 0) {
+            setMessages(prev => {
+              // Create a map of existing messages by ID
+              const existingMessages = new Map(prev.map(msg => [msg.id, msg]));
+              
+              // Add new messages that don't exist in the map
+              uniqueNewMessages.forEach(msg => {
+                if (!existingMessages.has(msg.id)) {
+                  existingMessages.set(msg.id, msg);
+                }
+              });
+              
+              // Convert map back to array and sort by created_at
+              return Array.from(existingMessages.values())
+                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+            });
+            
+            // Add new message IDs to our processed set
+            uniqueNewMessages.forEach(msg => processedMessageIds.current.add(msg.id));
+            lastMessageTimestampRef.current = newMessages[newMessages.length - 1].created_at;
+          }
+        }
+      } catch (error) {
+        console.error('Error in polling interval:', error);
       }
     }, 1000); // Poll every second
 
@@ -383,18 +420,22 @@ export default function VoidChat() {
       if (usersError) throw usersError;
 
       // Delete all media files
-      const { data: mediaFiles, error: listError } = await supabase.storage
-        .from('void-media')
-        .list(params.id);
-
-      if (listError) throw listError;
-
-      if (mediaFiles && mediaFiles.length > 0) {
-        const { error: deleteMediaError } = await supabase.storage
+      if (typeof params.id === 'string') {
+        const { data: mediaFiles, error: listError } = await supabase.storage
           .from('void-media')
-          .remove(mediaFiles.map(file => `${params.id}/${file.name}`));
+          .list(params.id);
 
-        if (deleteMediaError) throw deleteMediaError;
+        if (listError) throw listError;
+
+        if (mediaFiles && mediaFiles.length > 0) {
+          const { error: deleteMediaError } = await supabase.storage
+            .from('void-media')
+            .remove(mediaFiles.map(file => `${params.id}/${file.name}`));
+
+          if (deleteMediaError) throw deleteMediaError;
+        }
+      } else {
+        console.error('Invalid void ID for media deletion');
       }
 
       // Finally, delete the void itself
@@ -533,16 +574,17 @@ export default function VoidChat() {
   return (
     <div className="flex flex-col h-screen bg-gray-900">
       <header className="bg-gray-800 p-4 border-b border-gray-700">
-        <div className="container mx-auto">
-          <div className="flex items-center justify-between mb-2">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between flex-wrap mb-2 gap-2">
             <button
               onClick={() => router.push('/')}
-              className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+              className="text-gray-400 hover:text-white transition-colors flex items-center gap-2 text-sm md:text-base"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
               </svg>
-              Back to Dashboard
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="inline sm:hidden">Back</span>
             </button>
             <div className="flex items-center gap-4">
               <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm">
@@ -551,22 +593,23 @@ export default function VoidChat() {
               {currentUser?.id === void_.created_by && (
                 <button
                   onClick={() => setShowDeleteModal(true)}
-                  className="text-red-500 hover:text-red-400 transition-colors flex items-center gap-2"
+                  className="text-red-500 hover:text-red-400 transition-colors flex items-center gap-2 text-sm md:text-base"
                 >
                   <TrashIcon className="w-5 h-5" />
-                  Delete Void
+                  <span className="hidden sm:inline">Delete Void</span>
+                  <span className="inline sm:hidden">Delete</span>
                 </button>
               )}
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">{void_.name}</h1>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h1 className="text-xl font-bold truncate max-w-[50%] sm:max-w-xs">{void_.name}</h1>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 readOnly
                 value={`${window.location.origin}/void/${params.id}`}
-                className="px-3 py-1 bg-gray-700 rounded-lg text-sm text-gray-300 w-64"
+                className="px-3 py-1 bg-gray-700 rounded-lg text-sm text-gray-300 w-32 sm:w-48 md:w-64 truncate"
               />
               <button
                 onClick={() => {
@@ -575,7 +618,7 @@ export default function VoidChat() {
                 }}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg text-sm transition-colors"
               >
-                Copy Link
+                Copy
               </button>
             </div>
           </div>
@@ -594,36 +637,31 @@ export default function VoidChat() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className={`flex items-start gap-2 ${
-                  isCurrentUser ? 'justify-end' : 'justify-start'
-                }`}
+                className={`flex items-start gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}
+                  ${isCurrentUser ? 'ml-auto' : 'mr-auto'} max-w-[90%] sm:max-w-[70%]`}
               >
                 {!isCurrentUser && (
                   <img
                     src={sender?.avatar_url}
                     alt={sender?.nickname}
-                    className="w-8 h-8 rounded-full"
+                    className="w-8 h-8 rounded-full flex-shrink-0"
                   />
                 )}
-                <div className="flex flex-col max-w-[70%]">
+                <div className="flex flex-col">
                   {!isCurrentUser && (
                     <span className="text-sm font-medium text-gray-400 mb-1">
                       {sender?.nickname}
                     </span>
                   )}
                   <div
-                    className={`rounded-lg p-3 ${
-                      isCurrentUser
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-700 text-white'
-                    }`}
+                    className={`rounded-lg p-3 ${getUserColor(message.user_id)}`}
                   >
                     {message.media_url ? (
                       message.media_type === 'image' ? (
                         <img
                           src={supabase.storage.from('void-media').getPublicUrl(message.media_url).data.publicUrl}
                           alt="Shared image"
-                          className="max-w-full rounded-lg"
+                          className="max-w-full h-auto rounded-lg"
                           onError={(e) => {
                             console.error('Image load error:', e);
                             e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Image+Not+Found';
@@ -633,14 +671,15 @@ export default function VoidChat() {
                         <video
                           src={supabase.storage.from('void-media').getPublicUrl(message.media_url).data.publicUrl}
                           controls
-                          className="max-w-full rounded-lg"
+                          className="max-w-full h-auto rounded-lg"
                           onError={(e) => {
                             console.error('Video load error:', e);
+                            e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Video+Not+Found';
                           }}
                         />
                       )
                     ) : (
-                      <p>{message.content}</p>
+                      <p className="break-words">{message.content}</p>
                     )}
                   </div>
                   <span className="text-xs text-gray-500 mt-1 self-end">
@@ -651,7 +690,7 @@ export default function VoidChat() {
                   <img
                     src={currentUser.avatar_url}
                     alt="You"
-                    className="w-8 h-8 rounded-full"
+                    className="w-8 h-8 rounded-full flex-shrink-0"
                   />
                 )}
               </motion.div>
@@ -661,8 +700,8 @@ export default function VoidChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gray-800 border-t border-gray-700">
-        <div className="container mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gray-800 border-t border-gray-700 z-10">
+        <div className="container mx-auto px-4">
           <AnimatePresence>
             {showMediaUpload && (
               <motion.div
@@ -687,11 +726,12 @@ export default function VoidChat() {
             )}
           </AnimatePresence>
 
-          <form onSubmit={handleSendMessage} className="flex gap-4">
+          <form onSubmit={handleSendMessage} className="flex gap-2 sm:gap-4">
             <button
               type="button"
               onClick={() => setShowMediaUpload(!showMediaUpload)}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
+              className="p-2 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+              title="Upload Media"
             >
               <PhotoIcon className="w-6 h-6" />
             </button>
@@ -704,7 +744,8 @@ export default function VoidChat() {
             />
             <button
               type="submit"
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg transition-colors"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+              disabled={!newMessage.trim()}
             >
               Send
             </button>
