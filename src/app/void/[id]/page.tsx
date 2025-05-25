@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { Message, Void, VoidUser } from '@/lib/supabase';
 import toast from 'react-hot-toast';
@@ -44,7 +44,6 @@ export default function VoidChat() {
   const [showJoinModal, setShowJoinModal] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [nickname, setNickname] = useState('');
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageTimestampRef = useRef<string | null>(null);
   const processedMessageIds = useRef(new Set<string>());

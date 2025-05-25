@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
@@ -34,7 +34,7 @@ export default function AdminDashboard() {
     }
 
     fetchStats();
-  }, []);
+  }, [router]);
 
   const fetchStats = async () => {
     try {

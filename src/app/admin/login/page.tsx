@@ -14,18 +14,11 @@ export default function AdminLogin() {
   const [isPageLoading, setIsPageLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Admin login page mounted');
-    // Check if already logged in
     const adminSession = localStorage.getItem('admin_session');
-    console.log('Admin session:', adminSession);
     if (adminSession) {
-      console.log('Redirecting to dashboard...');
       router.push('/admin/dashboard');
-    } else {
-      console.log('No admin session found');
-      setIsPageLoading(false);
     }
-  }, []);
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
