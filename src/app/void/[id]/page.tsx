@@ -593,6 +593,90 @@ export default function VoidChat() {
     }
   };
 
+  const handleMediaUpload = async (file: File) => {
+    if (!file || !currentUser) return;
+    
+    try {
+      setIsUploading(true);
+      setUploadError(null);
+
+      // Generate a unique file name
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${params.id}/${fileName}`;
+
+      console.log('Uploading file:', { fileName, filePath, fileType: file.type });
+
+      // Upload the file
+      const { error: uploadError, data } = await supabase.storage
+        .from('void-media')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Upload error details:', uploadError);
+        throw new Error(uploadError.message);
+      }
+
+      if (!data?.path) {
+        throw new Error('No file path returned from upload');
+      }
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('void-media')
+        .getPublicUrl(data.path);
+
+      console.log('File uploaded successfully:', { publicUrl, path: data.path });
+
+      // Add message with media and expiration
+      const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes from now
+      const { data: message, error: messageError } = await supabase
+        .from('messages')
+        .insert([
+          {
+            void_id: params.id,
+            user_id: currentUser.id,
+            content: '',
+            media_url: data.path,
+            media_type: file.type.startsWith('image/') ? 'image' : 'video',
+            expires_at: expiresAt
+          }
+        ])
+        .select()
+        .single();
+
+      if (messageError) {
+        console.error('Message creation error:', messageError);
+        // If message creation fails, delete the uploaded file
+        await supabase.storage
+          .from('void-media')
+          .remove([data.path]);
+        throw new Error(messageError.message);
+      }
+
+      // Add the new message to local state
+      setMessages(prev => {
+        // Check if message already exists
+        if (prev.some(existingMsg => existingMsg.id === message.id)) {
+          return prev;
+        }
+        return [...prev, message];
+      });
+
+      setShowMediaUpload(false);
+      toast.success('Media uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading media:', error);
+      setUploadError(error instanceof Error ? error.message : 'Failed to upload media');
+      toast.error('Failed to upload media. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (!mounted) {
     return null;
   }
