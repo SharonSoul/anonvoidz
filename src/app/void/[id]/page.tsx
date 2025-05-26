@@ -405,7 +405,7 @@ export default function VoidChat() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#00f0ff]"></div>
       </div>
     );
   }
@@ -414,10 +414,10 @@ export default function VoidChat() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-500 mb-4">Void Not Found</h1>
+          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-[#8b5cf6]/80 mb-4">Void Not Found</h1>
           <button
             onClick={() => router.push('/')}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg"
+            className="bg-gradient-to-r from-[#00f0ff] to-[#8b5cf6]/80 text-white px-6 py-2 rounded-lg transition-all duration-300 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]"
           >
             Return Home
           </button>
@@ -517,22 +517,20 @@ export default function VoidChat() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
-      <header className="bg-gray-800 p-4 border-b border-gray-700">
+    <div className="flex flex-col h-screen bg-background">
+      <header className="bg-gradient-to-br from-[#00f0ff]/20 via-black/80 to-[#8b5cf6]/20 backdrop-blur-xl border-b border-white/10 shadow-[0_0_30px_0_rgba(0,240,255,0.08)] p-4">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between flex-wrap mb-2 gap-2">
             <button
-              onClick={() => router.push('/')}
-              className="text-gray-400 hover:text-white transition-colors flex items-center gap-2 text-sm md:text-base"
+              onClick={() => router.push('/void-space')}
+              className="group inline-flex items-center gap-2 text-sm md:text-base text-cyan-300 hover:text-white transition-all duration-300"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-              </svg>
-              <span className="hidden sm:inline">Back to Dashboard</span>
+              <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+              <span className="hidden sm:inline">Back to Void Space</span>
               <span className="inline sm:hidden">Back</span>
             </button>
             <div className="flex items-center gap-4">
-              <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm">
+              <span className="bg-gradient-to-r from-[#00f0ff] to-black/80 text-white px-3 py-1 rounded-full text-sm shadow-[0_0_15px_rgba(0,240,255,0.2)]">
                 {users.length}/{void_.user_cap}
               </span>
               {currentUser?.id === void_.created_by && (
@@ -548,20 +546,22 @@ export default function VoidChat() {
             </div>
           </div>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h1 className="text-xl font-bold truncate max-w-[50%] sm:max-w-xs">{void_.name}</h1>
+            <h1 className="text-xl font-['Orbitron'] font-bold truncate max-w-[50%] sm:max-w-xs text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-[#8b5cf6]/80">
+              {void_.name}
+            </h1>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 readOnly
                 value={`${window.location.origin}/void/${params.id}`}
-                className="px-3 py-1 bg-gray-700 rounded-lg text-sm text-gray-300 w-32 sm:w-48 md:w-64 truncate"
+                className="px-3 py-1 bg-black/40 border border-white/10 rounded-lg text-sm text-gray-300 w-32 sm:w-48 md:w-64 truncate backdrop-blur-md shadow-[0_0_10px_0_rgba(0,240,255,0.08)]"
               />
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(`${window.location.origin}/void/${params.id}`);
                   toast.success('Link copied to clipboard!');
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg text-sm transition-colors"
+                className="bg-gradient-to-r from-[#00f0ff] to-black/80 hover:from-[#00f0ff] hover:to-[#8b5cf6] text-white px-3 py-1 rounded-lg text-sm transition-all duration-300 shadow-[0_0_15px_rgba(0,240,255,0.2)]"
               >
                 Copy
               </button>
@@ -647,7 +647,7 @@ export default function VoidChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gray-800 border-t border-gray-700 z-10">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-br from-[#00f0ff]/30 via-black/80 to-[#8b5cf6]/20 backdrop-blur-xl border-t border-white/10 z-10 shadow-[0_0_30px_0_rgba(0,240,255,0.08)]">
         <div className="container mx-auto px-4">
           <AnimatePresence>
             {showMediaUpload && (
@@ -677,7 +677,7 @@ export default function VoidChat() {
             <button
               type="button"
               onClick={() => setShowMediaUpload(!showMediaUpload)}
-              className="p-2 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+              className="p-2 text-cyan-300 hover:text-white transition-colors flex-shrink-0"
               title="Upload Media"
             >
               <PhotoIcon className="w-6 h-6" />
@@ -687,11 +687,11 @@ export default function VoidChat() {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type a message..."
-              className="flex-1 px-4 py-2 rounded-lg bg-gray-700 border border-gray-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-white placeholder-gray-400"
+              className="flex-1 px-4 py-2 rounded-lg bg-black/40 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-white placeholder-gray-400 backdrop-blur-md shadow-[0_0_10px_0_rgba(0,240,255,0.08)] transition-all duration-300"
             />
             <button
               type="submit"
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+              className="bg-gradient-to-r from-[#00f0ff] to-black/80 hover:from-[#00f0ff] hover:to-[#8b5cf6] text-white px-4 py-2 rounded-lg transition-all duration-300 flex-shrink-0 shadow-[0_0_15px_rgba(0,240,255,0.2)] disabled:opacity-50"
               disabled={!newMessage.trim()}
             >
               Send

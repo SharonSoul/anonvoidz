@@ -31,9 +31,56 @@ export default function Home() {
   }, []);
 
   return (
-    <div className={`min-h-screen bg-[${COLORS.background}] text-[${COLORS.text}]`}>
+    <div className="min-h-screen bg-background text-text relative overflow-hidden">
+      {/* Background Elements */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#8b5cf6]/10 via-[#0d0d0d] to-[#00f0ff]/10" />
+        {/* Floating Bubbles */}
+        {[...Array(20)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-2 h-2 rounded-full bg-primary/20"
+            initial={{
+              x: Math.random() * 100 + '%',
+              y: Math.random() * 100 + '%',
+              scale: Math.random() * 0.5 + 0.5,
+            }}
+            animate={{
+              y: [0, -20, 0],
+              opacity: [0.2, 0.5, 0.2],
+            }}
+            transition={{
+              duration: Math.random() * 3 + 2,
+              repeat: Infinity,
+              delay: Math.random() * 2,
+            }}
+          />
+        ))}
+        {/* Stars */}
+        {[...Array(50)].map((_, i) => (
+          <motion.div
+            key={`star-${i}`}
+            className="absolute w-1 h-1 rounded-full bg-white"
+            initial={{
+              x: Math.random() * 100 + '%',
+              y: Math.random() * 100 + '%',
+              scale: Math.random() * 0.5 + 0.5,
+            }}
+            animate={{
+              opacity: [0.2, 0.8, 0.2],
+            }}
+            transition={{
+              duration: Math.random() * 2 + 1,
+              repeat: Infinity,
+              delay: Math.random() * 2,
+            }}
+          />
+        ))}
+      </div>
+
       {/* Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-md border-b border-white/10">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-xl border-b border-white/5">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-16">
             <motion.div 
@@ -41,8 +88,8 @@ export default function Home() {
               animate={{ opacity: 1, x: 0 }}
               className="flex items-center gap-2"
             >
-              <div className={`w-3 h-3 rounded-full bg-[${COLORS.primary}] animate-pulse`} />
-              <span className={`text-xl font-['Orbitron'] font-bold bg-gradient-to-r from-[${COLORS.primary}] to-[${COLORS.secondary}] bg-clip-text text-transparent`}>
+              <div className="w-3 h-3 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(0,240,255,0.5)]" />
+              <span className="text-xl font-['Orbitron'] font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
                 AnonVoidz
               </span>
             </motion.div>
@@ -53,7 +100,7 @@ export default function Home() {
             >
               <Link 
                 href="/void-space"
-                className={`group px-4 py-2 text-sm font-medium text-[${COLORS.primary}] border border-[${COLORS.primary}] rounded-lg hover:bg-[${COLORS.hover}] transition-all duration-300 hover:shadow-[0_0_15px_${COLORS.glow}]`}
+                className="group px-4 py-2 text-sm font-medium text-primary border border-primary/50 rounded-lg hover:bg-primary/10 transition-all duration-300 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)] hover:border-primary"
               >
                 Create a Void
                 <span className="inline-block ml-2 group-hover:translate-x-1 transition-transform">→</span>
@@ -65,8 +112,8 @@ export default function Home() {
 
       {/* Hero Section */}
       <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        <div className={`absolute inset-0 bg-gradient-to-br from-[${COLORS.secondary}]/20 via-[${COLORS.background}] to-[${COLORS.primary}]/20`} />
-        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#8b5cf6]/10 via-[#0d0d0d] to-[#00f0ff]/10" />
+        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10" />
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -78,7 +125,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className={`text-5xl md:text-7xl font-['Orbitron'] font-bold mb-6 bg-gradient-to-r from-[${COLORS.primary}] to-[${COLORS.secondary}] bg-clip-text text-transparent`}
+              className="text-5xl md:text-7xl font-['Orbitron'] font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80"
             >
               Enter the Void of Anonymous Conversations
             </motion.h1>
@@ -98,7 +145,7 @@ export default function Home() {
             >
               <Link 
                 href="/void-space"
-                className={`group inline-flex items-center px-8 py-4 bg-gradient-to-r from-[${COLORS.primary}] to-[${COLORS.secondary}] rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-[0_0_20px_${COLORS.glow}]`}
+                className="group inline-flex items-center px-8 py-4 bg-gradient-to-r from-[#00f0ff] to-black/80 rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)]"
               >
                 Browse Voids
                 <ArrowRightIcon className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -126,7 +173,7 @@ export default function Home() {
               className="text-3xl md:text-4xl font-['Orbitron'] font-bold text-center mb-16 relative"
             >
               Available Voids
-              <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-[${COLORS.primary}] to-[${COLORS.secondary}] rounded-full blur-sm`} />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-primary via-secondary to-primary rounded-full blur-sm animate-gradient" />
             </motion.h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {['Tech Talk', 'Gaming Squad', 'Movie Night'].map((title, index) => (
@@ -136,7 +183,7 @@ export default function Home() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.2 }}
-                  className={`group bg-black/50 backdrop-blur-md border border-[${COLORS.border}] rounded-lg p-6 transition-all duration-300 hover:border-[${COLORS.primary}]/50 hover:shadow-[0_0_20px_${COLORS.glow}]`}
+                  className="group bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg p-6 transition-all duration-300 hover:border-primary/50 hover:shadow-[0_0_20px_rgba(0,240,255,0.2)] hover:-translate-y-1"
                 >
                   <h3 className="text-xl font-semibold mb-2">{title}</h3>
                   <p className="text-gray-400 mb-4">
@@ -145,8 +192,8 @@ export default function Home() {
                      '#movies #series #discussion'}
                   </p>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-[#00f0ff]">{voidUsers[index] || 0}/5 users</span>
-                    <button className={`px-4 py-2 bg-[${COLORS.hover}] text-[${COLORS.primary}] rounded-lg transition-all duration-300 group-hover:bg-[${COLORS.primary}] group-hover:text-black`}>
+                    <span className="text-sm text-primary">{voidUsers[index] || 0}/5 users</span>
+                    <button className="px-4 py-2 bg-primary/10 text-primary rounded-lg transition-all duration-300 group-hover:bg-[#00f0ff] group-hover:text-black">
                       Join
                     </button>
                   </div>
@@ -276,7 +323,7 @@ export default function Home() {
             </p>
             <Link 
               href="/void-space"
-              className={`group inline-flex items-center px-8 py-4 bg-gradient-to-r from-[${COLORS.primary}] to-[${COLORS.secondary}] rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-[0_0_20px_${COLORS.glow}]`}
+              className="group inline-flex items-center px-8 py-4 bg-gradient-to-r from-[#00f0ff] to-black/80 rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)]"
             >
               Create Your Void
               <SparklesIcon className="w-5 h-5 ml-2 group-hover:rotate-12 transition-transform" />
