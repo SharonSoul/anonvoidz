@@ -60,6 +60,7 @@ export default function VoidChat() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [userColors, setUserColors] = useState<Record<string, string>>({});
 
   const fetchVoid = useCallback(async () => {
     if (!params.id) return null;
@@ -83,10 +84,12 @@ export default function VoidChat() {
   const fetchMessages = useCallback(async () => {
     if (!params.id) return;
     try {
+      const now = new Date().toISOString();
       const { data, error } = await supabase
         .from('messages')
         .select('*, void_users(*)')
         .eq('void_id', params.id)
+        .gt('expires_at', now)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -106,10 +109,53 @@ export default function VoidChat() {
 
       if (error) throw error;
       setUsers(data || []);
+      
+      // Assign colors directly here instead of using the callback
+      const colors = [
+        'bg-purple-600',
+        'bg-blue-600',
+        'bg-green-600',
+        'bg-pink-600',
+        'bg-indigo-600',
+        'bg-teal-600',
+        'bg-orange-600',
+        'bg-cyan-600',
+        'bg-rose-600',
+        'bg-violet-600',
+      ];
+
+      const newUserColors: Record<string, string> = {};
+      const usedColors = new Set<string>();
+
+      // First, preserve existing color assignments
+      data?.forEach(user => {
+        if (userColors[user.id]) {
+          newUserColors[user.id] = userColors[user.id];
+          usedColors.add(userColors[user.id]);
+        }
+      });
+
+      // Then assign new colors to users without colors
+      data?.forEach(user => {
+        if (!newUserColors[user.id]) {
+          // Find first unused color
+          const availableColor = colors.find(color => !usedColors.has(color));
+          if (availableColor) {
+            newUserColors[user.id] = availableColor;
+            usedColors.add(availableColor);
+          } else {
+            // If all colors are used, start reusing from the beginning
+            const fallbackColor = colors[Object.keys(newUserColors).length % colors.length];
+            newUserColors[user.id] = fallbackColor;
+          }
+        }
+      });
+
+      setUserColors(newUserColors);
     } catch (error) {
       console.error('Error fetching users:', error);
     }
-  }, [params.id]);
+  }, [params.id, userColors]);
 
   const initializeVoid = useCallback(async () => {
     try {
@@ -262,6 +308,34 @@ export default function VoidChat() {
         throw new Error('No user data returned after insert');
       }
 
+      // Assign color to new user using the same logic
+      const colors = [
+        'bg-purple-600',
+        'bg-blue-600',
+        'bg-green-600',
+        'bg-pink-600',
+        'bg-indigo-600',
+        'bg-teal-600',
+        'bg-orange-600',
+        'bg-cyan-600',
+        'bg-rose-600',
+        'bg-violet-600',
+      ];
+
+      const newUserColors = { ...userColors };
+      const usedColors = new Set(Object.values(newUserColors));
+
+      // Find first unused color
+      const availableColor = colors.find(color => !usedColors.has(color));
+      if (availableColor) {
+        newUserColors[user.id] = availableColor;
+      } else {
+        // If all colors are used, start reusing from the beginning
+        newUserColors[user.id] = colors[Object.keys(newUserColors).length % colors.length];
+      }
+
+      setUserColors(newUserColors);
+
       // Save user session to localStorage
       localStorage.setItem(`void_user_${params.id}`, JSON.stringify(user));
 
@@ -358,7 +432,7 @@ export default function VoidChat() {
     }
   };
 
-  // Add polling for new messages
+  // Update polling to filter out expired messages
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
     let lastMessageId: string | null = null;
@@ -367,10 +441,12 @@ export default function VoidChat() {
       if (!params.id) return;
 
       try {
+        const now = new Date().toISOString();
         const { data, error } = await supabase
           .from('messages')
           .select('*, void_users(*)')
           .eq('void_id', params.id)
+          .gt('expires_at', now)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -397,153 +473,25 @@ export default function VoidChat() {
     };
   }, [params.id]);
 
-  // Remove the old real-time subscription since we're using polling now
+  // Add message expiration check
   useEffect(() => {
-    initializeVoid();
-  }, [params.id, currentUser?.id, initializeVoid]);
+    if (!mounted) return;
 
-  const handleMediaUpload = async (file: File) => {
-    if (!file || !currentUser) return;
-    
-    try {
-      setIsUploading(true);
-      setUploadError(null);
+    const checkExpiredMessages = () => {
+      const now = new Date().toISOString();
+      setMessages(prev => prev.filter(msg => {
+        // Keep message if it hasn't expired yet
+        return new Date(msg.expires_at) > new Date(now);
+      }));
+    };
 
-      // Generate a unique file name
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${params.id}/${fileName}`;
+    // Check for expired messages every 10 seconds
+    const expirationInterval = setInterval(checkExpiredMessages, 10000);
 
-      console.log('Uploading file:', { fileName, filePath, fileType: file.type });
-
-      // Upload the file
-      const { error: uploadError, data } = await supabase.storage
-        .from('void-media')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Upload error details:', uploadError);
-        throw new Error(uploadError.message);
-      }
-
-      if (!data?.path) {
-        throw new Error('No file path returned from upload');
-      }
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('void-media')
-        .getPublicUrl(data.path);
-
-      console.log('File uploaded successfully:', { publicUrl, path: data.path });
-
-      // Add message with media and expiration
-      const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes from now
-      const { data: message, error: messageError } = await supabase
-        .from('messages')
-        .insert([
-          {
-            void_id: params.id,
-            user_id: currentUser.id,
-            content: '',
-            media_url: data.path,
-            media_type: file.type.startsWith('image/') ? 'image' : 'video',
-            expires_at: expiresAt
-          }
-        ])
-        .select()
-        .single();
-
-      if (messageError) {
-        console.error('Message creation error:', messageError);
-        // If message creation fails, delete the uploaded file
-        await supabase.storage
-          .from('void-media')
-          .remove([data.path]);
-        throw new Error(messageError.message);
-      }
-
-      // Add the new message to local state
-      setMessages(prev => {
-        // Check if message already exists
-        if (prev.some(existingMsg => existingMsg.id === message.id)) {
-          return prev;
-        }
-        return [...prev, message];
-      });
-
-      setShowMediaUpload(false);
-      toast.success('Media uploaded successfully!');
-    } catch (error) {
-      console.error('Error uploading media:', error);
-      setUploadError(error instanceof Error ? error.message : 'Failed to upload media');
-      toast.error('Failed to upload media. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleDeleteVoid = async () => {
-    if (!void_ || !currentUser || currentUser.id !== void_.created_by) return;
-    
-    setIsDeleting(true);
-    try {
-      // Delete all messages
-      const { error: messagesError } = await supabase
-        .from('messages')
-        .delete()
-        .eq('void_id', params.id);
-
-      if (messagesError) throw messagesError;
-
-      // Delete all users
-      const { error: usersError } = await supabase
-        .from('void_users')
-        .delete()
-        .eq('void_id', params.id);
-
-      if (usersError) throw usersError;
-
-      // Delete all media files
-      if (typeof params.id === 'string') {
-        const { data: mediaFiles, error: listError } = await supabase.storage
-          .from('void-media')
-          .list(params.id);
-
-        if (listError) throw listError;
-
-        if (mediaFiles && mediaFiles.length > 0) {
-          const { error: deleteMediaError } = await supabase.storage
-            .from('void-media')
-            .remove(mediaFiles.map(file => `${params.id}/${file.name}`));
-
-          if (deleteMediaError) throw deleteMediaError;
-        }
-      } else {
-        console.error('Invalid void ID for media deletion');
-      }
-
-      // Finally, delete the void itself
-      const { error: voidError } = await supabase
-        .from('voids')
-        .delete()
-        .eq('id', params.id);
-
-      if (voidError) throw voidError;
-
-      toast.success('Void deleted successfully');
-      router.push('/');
-    } catch (error) {
-      console.error('Error deleting void:', error);
-      toast.error('Failed to delete void');
-    } finally {
-      setIsDeleting(false);
-      setShowDeleteModal(false);
-    }
-  };
+    return () => {
+      clearInterval(expirationInterval);
+    };
+  }, [mounted]);
 
   // Fix hydration error by using useEffect for client-side only code
   useEffect(() => {
@@ -644,26 +592,6 @@ export default function VoidChat() {
       setShowMessageDeleteModal(null);
     }
   };
-
-  // Add message expiration check
-  useEffect(() => {
-    if (!mounted) return;
-
-    const checkExpiredMessages = () => {
-      const now = new Date().toISOString();
-      setMessages(prev => prev.filter(msg => {
-        // Keep message if it hasn't expired yet
-        return new Date(msg.expires_at) > new Date(now);
-      }));
-    };
-
-    // Check for expired messages every 10 seconds
-    const expirationInterval = setInterval(checkExpiredMessages, 10000);
-
-    return () => {
-      clearInterval(expirationInterval);
-    };
-  }, [mounted]);
 
   if (!mounted) {
     return null;
@@ -876,7 +804,7 @@ export default function VoidChat() {
                     </div>
                   )}
                   <div
-                    className={`rounded-lg p-3 ${getUserColor(message.user_id)} select-none`}
+                    className={`rounded-lg p-3 ${userColors[message.user_id] || 'bg-gray-600'} select-none`}
                   >
                     {message.media_url ? (
                       message.media_type === 'image' ? (
