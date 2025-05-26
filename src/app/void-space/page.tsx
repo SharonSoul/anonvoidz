@@ -152,25 +152,25 @@ export default function VoidSpace() {
               className="flex items-center gap-2"
             >
               <div className="w-3 h-3 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(0,240,255,0.5)]" />
-              <h1 className="text-4xl font-['Orbitron'] font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
+              <h1 className="text-2xl sm:text-4xl font-['Orbitron'] font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
                 AnonVoidz
               </h1>
             </motion.div>
             <motion.div 
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="flex gap-4"
+              className="flex flex-col sm:flex-row gap-2 sm:gap-4"
             >
               <Link 
                 href="/"
-                className="group inline-flex items-center px-6 py-3 bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg text-lg font-medium transition-all duration-300 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]"
+                className="group inline-flex items-center px-4 sm:px-6 py-2 sm:py-3 bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg text-sm sm:text-lg font-medium transition-all duration-300 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(0,240,255,0.3)]"
               >
-                <ArrowLeftIcon className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
+                <ArrowLeftIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
                 Home
               </Link>
               <Link 
                 href="/admin/login"
-                className="px-6 py-3 bg-gradient-to-r from-[#00f0ff] to-black/80 rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)]"
+                className="px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-[#00f0ff] to-black/80 rounded-lg text-sm sm:text-lg font-medium transition-all duration-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)]"
               >
                 Admin Access
               </Link>
@@ -180,12 +180,12 @@ export default function VoidSpace() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg p-8 mb-8"
+            className="bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg p-4 sm:p-8 mb-8"
           >
-            <h2 className="text-2xl font-['Orbitron'] font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
+            <h2 className="text-xl sm:text-2xl font-['Orbitron'] font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
               Create a New Void
             </h2>
-            <p className="text-gray-300 mb-6">
+            <p className="text-gray-300 mb-6 text-sm sm:text-base">
               Create a new void for anonymous chat. Each void has a unique access code and can be joined by anyone with the link.
             </p>
             <div className="space-y-4">
@@ -236,15 +236,15 @@ export default function VoidSpace() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg p-8 mb-8"
+            className="bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg p-4 sm:p-8 mb-8"
           >
-            <h2 className="text-2xl font-['Orbitron'] font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
+            <h2 className="text-xl sm:text-2xl font-['Orbitron'] font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
               Join Existing Void
             </h2>
-            <p className="text-gray-300 mb-6">
+            <p className="text-gray-300 mb-6 text-sm sm:text-base">
               Have an access code? Enter it below to join an existing void.
             </p>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
               <input
                 type="text"
                 placeholder="Enter access code"
@@ -275,6 +275,35 @@ export default function VoidSpace() {
                   }
                 }}
               />
+              <button
+                onClick={async () => {
+                  const input = document.querySelector('input[placeholder="Enter access code"]') as HTMLInputElement;
+                  const code = input.value.trim();
+                  if (code) {
+                    try {
+                      const { data, error } = await supabase
+                        .from('voids')
+                        .select('id')
+                        .eq('access_code', code)
+                        .single();
+
+                      if (error) throw error;
+                      if (!data) {
+                        toast.error('Invalid access code');
+                        return;
+                      }
+
+                      window.location.href = `/void/${data.id}`;
+                    } catch (error) {
+                      console.error('Error finding void:', error);
+                      toast.error('Invalid access code');
+                    }
+                  }
+                }}
+                className="px-6 py-2 bg-gradient-to-r from-[#00f0ff] to-black/80 text-white rounded-lg transition-all duration-300 hover:shadow-[0_0_20px_rgba(0,240,255,0.4)]"
+              >
+                Join Void
+              </button>
             </div>
           </motion.div>
 
@@ -285,9 +314,9 @@ export default function VoidSpace() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg p-8"
+              className="bg-black/30 backdrop-blur-xl border border-white/5 rounded-lg p-4 sm:p-8"
             >
-              <h2 className="text-2xl font-['Orbitron'] font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
+              <h2 className="text-xl sm:text-2xl font-['Orbitron'] font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-[#00f0ff] to-black/80">
                 Active Voids
               </h2>
               <div className="space-y-4">
@@ -296,7 +325,7 @@ export default function VoidSpace() {
                     key={void_.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-between p-4 bg-black/50 rounded-lg border border-white/5 hover:border-primary/50 transition-all duration-300"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-black/50 rounded-lg border border-white/5 hover:border-primary/50 transition-all duration-300 gap-2 sm:gap-4"
                   >
                     <div>
                       <h3 className="font-medium">{void_.name}</h3>
