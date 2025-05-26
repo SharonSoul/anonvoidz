@@ -46,7 +46,6 @@ export default function VoidChat() {
   const [nickname, setNickname] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageTimestampRef = useRef<string | null>(null);
-  const processedMessageIds = useRef(new Set<string>());
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -137,8 +136,8 @@ export default function VoidChat() {
     initializeVoid();
 
     // Set up real-time subscriptions
-    const messagesChannel = supabase
-      .channel('void_messages')
+    const channel = supabase
+      .channel(`void_${params.id}`)
       .on(
         'postgres_changes',
         {
@@ -147,16 +146,31 @@ export default function VoidChat() {
           table: 'messages',
           filter: `void_id=eq.${params.id}`,
         },
-        (payload) => {
+        async (payload) => {
           if (payload.eventType === 'INSERT') {
-            const newMessage = payload.new as Message;
-            if (!processedMessageIds.current.has(newMessage.id)) {
-              processedMessageIds.current.add(newMessage.id);
-              setMessages(prev => [...prev, newMessage]);
-              // Only scroll to bottom when current user sends a message
-              if (newMessage.user_id === currentUser?.id) {
-                scrollToBottom();
+            // Fetch the complete message with user data
+            const { data: message, error } = await supabase
+              .from('messages')
+              .select('*, void_users(*)')
+              .eq('id', payload.new.id)
+              .single();
+
+            if (error) {
+              console.error('Error fetching message with user data:', error);
+              return;
+            }
+
+            setMessages(prev => {
+              // Check if message already exists
+              if (prev.some(existingMsg => existingMsg.id === message.id)) {
+                return prev;
               }
+              return [...prev, message];
+            });
+
+            // Only scroll to bottom when current user sends a message
+            if (message.user_id === currentUser?.id) {
+              scrollToBottom();
             }
           } else if (payload.eventType === 'DELETE') {
             setMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
@@ -165,30 +179,8 @@ export default function VoidChat() {
       )
       .subscribe();
 
-    const usersChannel = supabase
-      .channel('void_users')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'void_users',
-          filter: `void_id=eq.${params.id}`,
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setUsers(prev => [...prev, payload.new as VoidUser]);
-          } else if (payload.eventType === 'DELETE') {
-            setUsers(prev => prev.filter(user => user.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
-      // Cleanup subscriptions
-      messagesChannel.unsubscribe();
-      usersChannel.unsubscribe();
+      channel.unsubscribe();
     };
   }, [params.id, currentUser?.id, initializeVoid]);
 
@@ -279,6 +271,24 @@ export default function VoidChat() {
     e.preventDefault();
     if (!newMessage.trim() || !currentUser || !void_) return;
 
+    // Create optimistic message
+    const optimisticMessage = {
+      id: `temp-${Date.now()}`,
+      void_id: params.id as string,
+      user_id: currentUser.id,
+      content: newMessage,
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+      void_users: currentUser,
+      media_url: undefined,
+      media_type: undefined
+    } as Message;
+
+    // Add optimistic message immediately
+    setMessages(prev => [...prev, optimisticMessage]);
+    setNewMessage('');
+    scrollToBottom();
+
     try {
       const { data: message, error } = await supabase
         .from('messages')
@@ -294,21 +304,62 @@ export default function VoidChat() {
         .single();
 
       if (error) throw error;
-      
-      // Add message to local state immediately and mark it as processed
-      if (!processedMessageIds.current.has(message.id)) {
-        processedMessageIds.current.add(message.id);
-        setMessages(prev => [...prev, message]);
-        // Only scroll to bottom when current user sends a message
-        scrollToBottom();
-      }
-      
-      setNewMessage('');
+
+      // Replace optimistic message with real message
+      setMessages(prev => prev.map(msg => 
+        msg.id === optimisticMessage.id ? message : msg
+      ));
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
     }
   };
+
+  // Add polling for new messages
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    let lastMessageId: string | null = null;
+
+    const pollMessages = async () => {
+      if (!params.id) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*, void_users(*)')
+          .eq('void_id', params.id)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        // Only update if we have new messages
+        const latestMessage = data[data.length - 1];
+        if (latestMessage && latestMessage.id !== lastMessageId) {
+          lastMessageId = latestMessage.id;
+          setMessages(data);
+        }
+      } catch (error) {
+        console.error('Error polling messages:', error);
+      }
+    };
+
+    // Initial poll
+    pollMessages();
+    
+    // Poll every 1 second
+    pollInterval = setInterval(pollMessages, 1000);
+
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [params.id]);
+
+  // Remove the old real-time subscription since we're using polling now
+  useEffect(() => {
+    initializeVoid();
+  }, [params.id, currentUser?.id, initializeVoid]);
 
   const handleMediaUpload = async (file: File) => {
     if (!file || !currentUser) return;
@@ -451,6 +502,16 @@ export default function VoidChat() {
       setShowDeleteModal(false);
     }
   };
+
+  // Fix hydration error by using useEffect for client-side only code
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
 
   if (loading) {
     return (
