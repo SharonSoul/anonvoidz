@@ -43,11 +43,22 @@ export default function VoidChat() {
   const [loading, setLoading] = useState(true);
   const [showJoinModal, setShowJoinModal] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showMessageDeleteModal, setShowMessageDeleteModal] = useState<{
+    messageId: string;
+    deleteForEveryone: boolean;
+  } | null>(null);
   const [nickname, setNickname] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageTimestampRef = useRef<string | null>(null);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    messageId: string;
+  } | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const fetchVoid = useCallback(async () => {
     if (!params.id) return null;
@@ -271,39 +282,64 @@ export default function VoidChat() {
     e.preventDefault();
     if (!newMessage.trim() || !currentUser || !void_) return;
 
+    const messageContent = newMessage.trim();
+    setNewMessage(''); // Clear input immediately for better UX
+
     // Create optimistic message
     const optimisticMessage = {
       id: `temp-${Date.now()}`,
       void_id: params.id as string,
       user_id: currentUser.id,
-      content: newMessage,
+      content: messageContent,
       created_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
       void_users: currentUser,
       media_url: undefined,
-      media_type: undefined
+      media_type: undefined,
+      reply_to: replyTo?.id
     } as Message;
 
     // Add optimistic message immediately
     setMessages(prev => [...prev, optimisticMessage]);
-    setNewMessage('');
+    setReplyTo(null); // Clear reply after sending
     scrollToBottom();
 
     try {
-      const { data: message, error } = await supabase
+      // First, verify the void still exists
+      const { data: voidData, error: voidError } = await supabase
+        .from('voids')
+        .select('id')
+        .eq('id', params.id)
+        .single();
+
+      if (voidError || !voidData) {
+        throw new Error('Void no longer exists');
+      }
+
+      // Create message payload with reply information
+      const messagePayload = {
+        void_id: params.id,
+        user_id: currentUser.id,
+        content: messageContent,
+        expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+        reply_to: replyTo?.id
+      };
+
+      // Then create the message
+      const { data: message, error: messageError } = await supabase
         .from('messages')
-        .insert([
-          {
-            void_id: params.id,
-            user_id: currentUser.id,
-            content: newMessage,
-            expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
-          },
-        ])
+        .insert([messagePayload])
         .select('*, void_users(*)')
         .single();
 
-      if (error) throw error;
+      if (messageError) {
+        console.error('Message creation error:', messageError);
+        throw new Error(messageError.message);
+      }
+
+      if (!message) {
+        throw new Error('No message data returned');
+      }
 
       // Replace optimistic message with real message
       setMessages(prev => prev.map(msg => 
@@ -311,9 +347,12 @@ export default function VoidChat() {
       ));
     } catch (error) {
       console.error('Error sending message:', error);
-      toast.error('Failed to send message');
       // Remove optimistic message on error
       setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
+      // Restore the message content to the input
+      setNewMessage(messageContent);
+      // Show error toast with specific message
+      toast.error(error instanceof Error ? error.message : 'Failed to send message');
     }
   };
 
@@ -509,6 +548,89 @@ export default function VoidChat() {
     setMounted(true);
   }, []);
 
+  const handleContextMenu = (e: React.MouseEvent, messageId: string) => {
+    e.preventDefault(); // Prevent default context menu
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      messageId
+    });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, messageId: string) => {
+    e.preventDefault(); // Prevent text selection
+    longPressTimer.current = setTimeout(() => {
+      const touch = e.touches[0];
+      setContextMenu({
+        x: touch.clientX,
+        y: touch.clientY,
+        messageId
+      });
+    }, 500); // 500ms for long press
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchMove = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // Add click outside handler to close context menu
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenu) {
+        setContextMenu(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [contextMenu]);
+
+  const handleDeleteMessage = async (messageId: string, deleteForEveryone: boolean) => {
+    try {
+      if (!currentUser) return;
+
+      const message = messages.find(m => m.id === messageId);
+      if (!message) return;
+
+      // If not deleting for everyone, only allow deletion of own messages
+      if (!deleteForEveryone && message.user_id !== currentUser.id) {
+        toast.error('You can only delete your own messages');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) {
+        console.error('Delete error:', error);
+        throw new Error(error.message);
+      }
+
+      // Remove message from local state
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      toast.success('Message deleted');
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete message');
+    } finally {
+      setShowMessageDeleteModal(null);
+    }
+  };
+
   if (!mounted) {
     return null;
   }
@@ -686,6 +808,7 @@ export default function VoidChat() {
           {messages.map((message) => {
             const isCurrentUser = message.user_id === currentUser?.id;
             const sender = users.find((u) => u.id === message.user_id);
+            const replyToMessage = message.reply_to ? messages.find(m => m.id === message.reply_to) : null;
             
             return (
               <motion.div
@@ -695,6 +818,10 @@ export default function VoidChat() {
                 exit={{ opacity: 0, y: -20 }}
                 className={`flex items-start gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}
                   ${isCurrentUser ? 'ml-auto' : 'mr-auto'} max-w-[90%] sm:max-w-[70%]`}
+                onContextMenu={(e) => handleContextMenu(e, message.id)}
+                onTouchStart={(e) => handleTouchStart(e, message.id)}
+                onTouchEnd={handleTouchEnd}
+                onTouchMove={handleTouchMove}
               >
                 {!isCurrentUser && (
                   <img
@@ -708,6 +835,11 @@ export default function VoidChat() {
                     <span className="text-sm font-medium text-gray-400 mb-1">
                       {sender?.nickname}
                     </span>
+                  )}
+                  {replyToMessage && (
+                    <div className="text-xs text-gray-400 mb-1 border-l-2 border-gray-600 pl-2">
+                      Replying to {users.find(u => u.id === replyToMessage.user_id)?.nickname}: {replyToMessage.content}
+                    </div>
                   )}
                   <div
                     className={`rounded-lg p-3 ${getUserColor(message.user_id)}`}
@@ -758,9 +890,107 @@ export default function VoidChat() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Add message delete confirmation modal */}
+      {showMessageDeleteModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-gray-800 p-8 rounded-lg max-w-md w-full"
+          >
+            <h2 className="text-2xl font-bold mb-4 text-red-500">Delete Message</h2>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to delete this message?
+            </p>
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={() => handleDeleteMessage(showMessageDeleteModal.messageId, false)}
+                className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors"
+              >
+                Delete for me
+              </button>
+              {messages.find(m => m.id === showMessageDeleteModal.messageId)?.user_id === currentUser?.id && (
+                <button
+                  onClick={() => handleDeleteMessage(showMessageDeleteModal.messageId, true)}
+                  className="w-full bg-red-800 hover:bg-red-900 text-white py-2 rounded-lg transition-colors"
+                >
+                  Delete for everyone
+                </button>
+              )}
+              <button
+                onClick={() => setShowMessageDeleteModal(null)}
+                className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* Update context menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-2 min-w-[150px]"
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+        >
+          <button
+            onClick={() => {
+              const message = messages.find(m => m.id === contextMenu.messageId);
+              if (message) {
+                setReplyTo(message);
+                setContextMenu(null);
+              }
+            }}
+            className="w-full px-4 py-2 text-left text-gray-300 hover:bg-gray-700 transition-colors"
+          >
+            Reply
+          </button>
+          <button
+            onClick={() => {
+              setShowMessageDeleteModal({
+                messageId: contextMenu.messageId,
+                deleteForEveryone: false
+              });
+              setContextMenu(null);
+            }}
+            className="w-full px-4 py-2 text-left text-red-400 hover:bg-gray-700 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-br from-[#00f0ff]/30 via-black/80 to-[#8b5cf6]/20 backdrop-blur-xl border-t border-white/10 z-10 shadow-[0_0_30px_0_rgba(0,240,255,0.08)]">
         <div className="container mx-auto px-4">
           <AnimatePresence>
+            {replyTo && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="mb-4 p-2 bg-gray-800 rounded-lg flex items-center justify-between"
+              >
+                <div className="text-sm text-gray-300">
+                  Replying to {users.find(u => u.id === replyTo.user_id)?.nickname}: {replyTo.content}
+                </div>
+                <button
+                  onClick={() => setReplyTo(null)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  ×
+                </button>
+              </motion.div>
+            )}
             {showMediaUpload && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
