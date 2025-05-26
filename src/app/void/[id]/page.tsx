@@ -610,6 +610,18 @@ export default function VoidChat() {
         return;
       }
 
+      // First, find and delete any messages that are replies to this message
+      const { error: repliesError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('reply_to', messageId);
+
+      if (repliesError) {
+        console.error('Error deleting replies:', repliesError);
+        throw new Error(repliesError.message);
+      }
+
+      // Then delete the original message
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -620,8 +632,8 @@ export default function VoidChat() {
         throw new Error(error.message);
       }
 
-      // Remove message from local state
-      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      // Remove message and its replies from local state
+      setMessages(prev => prev.filter(msg => msg.id !== messageId && msg.reply_to !== messageId));
       toast.success('Message deleted');
     } catch (error) {
       console.error('Error deleting message:', error);
