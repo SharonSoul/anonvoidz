@@ -762,7 +762,7 @@ export default function VoidChat() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-screen bg-background select-none">
       <header className="bg-gradient-to-br from-[#00f0ff]/20 via-black/80 to-[#8b5cf6]/20 backdrop-blur-xl border-b border-white/10 shadow-[0_0_30px_0_rgba(0,240,255,0.08)] p-4">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between flex-wrap mb-2 gap-2">
@@ -829,7 +829,7 @@ export default function VoidChat() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 className={`flex items-start gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}
-                  ${isCurrentUser ? 'ml-auto' : 'mr-auto'} max-w-[90%] sm:max-w-[70%]`}
+                  ${isCurrentUser ? 'ml-auto' : 'mr-auto'} max-w-[90%] sm:max-w-[70%] select-none`}
                 onContextMenu={(e) => handleContextMenu(e, message.id)}
                 onTouchStart={(e) => handleTouchStart(e, message.id)}
                 onTouchEnd={handleTouchEnd}
@@ -854,7 +854,7 @@ export default function VoidChat() {
                     </div>
                   )}
                   <div
-                    className={`rounded-lg p-3 ${getUserColor(message.user_id)}`}
+                    className={`rounded-lg p-3 ${getUserColor(message.user_id)} select-none`}
                   >
                     {message.media_url ? (
                       message.media_type === 'image' ? (
@@ -863,7 +863,7 @@ export default function VoidChat() {
                           alt="Shared image"
                           width={400}
                           height={300}
-                          className="max-w-full h-auto rounded-lg"
+                          className="max-w-full h-auto rounded-lg select-none"
                           onError={(e) => {
                             console.error('Image load error:', e);
                             e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Image+Not+Found';
@@ -873,7 +873,7 @@ export default function VoidChat() {
                         <video
                           src={supabase.storage.from('void-media').getPublicUrl(message.media_url).data.publicUrl}
                           controls
-                          className="max-w-full h-auto rounded-lg"
+                          className="max-w-full h-auto rounded-lg select-none"
                           onError={(e) => {
                             console.error('Video load error:', e);
                             e.currentTarget.src = 'https://via.placeholder.com/400x300?text=Video+Not+Found';
@@ -881,10 +881,10 @@ export default function VoidChat() {
                         />
                       )
                     ) : (
-                      <p className="break-words">{message.content}</p>
+                      <p className="break-words select-none">{message.content}</p>
                     )}
                   </div>
-                  <span className="text-xs text-gray-500 mt-1 self-end">
+                  <span className="text-xs text-gray-500 mt-1 self-end select-none">
                     {format(new Date(message.created_at), 'HH:mm')}
                   </span>
                 </div>
@@ -990,7 +990,7 @@ export default function VoidChat() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="mb-4 p-2 bg-gray-800 rounded-lg flex items-center justify-between"
+                className="mb-4 p-2 bg-gray-800 rounded-lg flex items-center justify-between select-none"
               >
                 <div className="text-sm text-gray-300">
                   Replying to {users.find(u => u.id === replyTo.user_id)?.nickname}: {replyTo.content}
