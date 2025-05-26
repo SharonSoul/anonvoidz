@@ -59,6 +59,7 @@ export default function VoidChat() {
   } | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const fetchVoid = useCallback(async () => {
     if (!params.id) return null;
@@ -285,14 +286,15 @@ export default function VoidChat() {
     const messageContent = newMessage.trim();
     setNewMessage(''); // Clear input immediately for better UX
 
-    // Create optimistic message
+    // Create optimistic message with expiration
+    const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes from now
     const optimisticMessage = {
       id: `temp-${Date.now()}`,
       void_id: params.id as string,
       user_id: currentUser.id,
       content: messageContent,
       created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+      expires_at: expiresAt,
       void_users: currentUser,
       media_url: undefined,
       media_type: undefined,
@@ -316,12 +318,12 @@ export default function VoidChat() {
         throw new Error('Void no longer exists');
       }
 
-      // Create message payload with reply information
+      // Create message payload with expiration
       const messagePayload = {
         void_id: params.id,
         user_id: currentUser.id,
         content: messageContent,
-        expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+        expires_at: expiresAt,
         reply_to: replyTo?.id
       };
 
@@ -438,7 +440,8 @@ export default function VoidChat() {
 
       console.log('File uploaded successfully:', { publicUrl, path: data.path });
 
-      // Add message with media
+      // Add message with media and expiration
+      const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // 2 minutes from now
       const { data: message, error: messageError } = await supabase
         .from('messages')
         .insert([
@@ -448,7 +451,7 @@ export default function VoidChat() {
             content: '',
             media_url: data.path,
             media_type: file.type.startsWith('image/') ? 'image' : 'video',
-            expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString()
+            expires_at: expiresAt
           }
         ])
         .select()
@@ -543,7 +546,6 @@ export default function VoidChat() {
   };
 
   // Fix hydration error by using useEffect for client-side only code
-  const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -642,6 +644,26 @@ export default function VoidChat() {
       setShowMessageDeleteModal(null);
     }
   };
+
+  // Add message expiration check
+  useEffect(() => {
+    if (!mounted) return;
+
+    const checkExpiredMessages = () => {
+      const now = new Date().toISOString();
+      setMessages(prev => prev.filter(msg => {
+        // Keep message if it hasn't expired yet
+        return new Date(msg.expires_at) > new Date(now);
+      }));
+    };
+
+    // Check for expired messages every 10 seconds
+    const expirationInterval = setInterval(checkExpiredMessages, 10000);
+
+    return () => {
+      clearInterval(expirationInterval);
+    };
+  }, [mounted]);
 
   if (!mounted) {
     return null;
