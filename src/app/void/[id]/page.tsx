@@ -135,12 +135,62 @@ export default function VoidChat() {
 
   useEffect(() => {
     initializeVoid();
+
+    // Set up real-time subscriptions
+    const messagesChannel = supabase
+      .channel('void_messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+          filter: `void_id=eq.${params.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newMessage = payload.new as Message;
+            if (!processedMessageIds.current.has(newMessage.id)) {
+              processedMessageIds.current.add(newMessage.id);
+              setMessages(prev => [...prev, newMessage]);
+              // Only scroll to bottom when current user sends a message
+              if (newMessage.user_id === currentUser?.id) {
+                scrollToBottom();
+              }
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    const usersChannel = supabase
+      .channel('void_users')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'void_users',
+          filter: `void_id=eq.${params.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setUsers(prev => [...prev, payload.new as VoidUser]);
+          } else if (payload.eventType === 'DELETE') {
+            setUsers(prev => prev.filter(user => user.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       // Cleanup subscriptions
-      const channel = supabase.channel('void_messages');
-      channel.unsubscribe();
+      messagesChannel.unsubscribe();
+      usersChannel.unsubscribe();
     };
-  }, [initializeVoid]);
+  }, [params.id, currentUser?.id, initializeVoid]);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
