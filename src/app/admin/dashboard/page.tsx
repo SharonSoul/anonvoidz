@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
-import { TrashIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { TrashIcon, ArrowLeftIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -24,6 +24,9 @@ export default function AdminDashboard() {
   const [isDeletingVoids, setIsDeletingVoids] = useState(false);
   const [isDeletingMedia, setIsDeletingMedia] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteType, setDeleteType] = useState<DeleteType>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -85,8 +88,35 @@ export default function AdminDashboard() {
     fetchStats();
   }, [router, fetchStats]);
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteType) return;
+    
+    setIsDeleting(true);
+    try {
+      switch (deleteType) {
+        case 'messages':
+          await handleDeleteMessages();
+          break;
+        case 'users':
+          await handleDeleteUsers();
+          break;
+        case 'voids':
+          await handleDeleteVoids();
+          break;
+        case 'media':
+          await handleDeleteMedia();
+          break;
+        case 'all':
+          await handleClearAll();
+          break;
+      }
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
   const handleDeleteMessages = async () => {
-    if (!confirm('Are you sure you want to delete all messages? This cannot be undone.')) return;
     setIsDeletingMessages(true);
     try {
       const { error } = await supabase
@@ -106,7 +136,6 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteUsers = async () => {
-    if (!confirm('Are you sure you want to delete all users? This cannot be undone.')) return;
     setIsDeletingUsers(true);
     try {
       const { error } = await supabase
@@ -126,7 +155,6 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteVoids = async () => {
-    if (!confirm('Are you sure you want to delete all voids? This cannot be undone.')) return;
     setIsDeletingVoids(true);
     try {
       // Delete all messages
@@ -194,7 +222,6 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteMedia = async () => {
-    if (!confirm('Are you sure you want to delete all media files? This cannot be undone.')) return;
     setIsDeletingMedia(true);
     try {
       const { data: mediaFiles, error: listError } = await supabase.storage
@@ -227,7 +254,6 @@ export default function AdminDashboard() {
   };
 
   const handleClearAll = async () => {
-    if (!confirm('Are you sure you want to clear all data? This cannot be undone.')) return;
     setIsClearingAll(true);
     try {
       // Delete all messages
@@ -294,6 +320,41 @@ export default function AdminDashboard() {
     }
   };
 
+  const getDeleteModalContent = () => {
+    switch (deleteType) {
+      case 'messages':
+        return {
+          title: 'Delete All Messages',
+          message: 'Are you sure you want to delete all messages? This action cannot be undone.'
+        };
+      case 'users':
+        return {
+          title: 'Delete All Users',
+          message: 'Are you sure you want to delete all users? This action cannot be undone.'
+        };
+      case 'voids':
+        return {
+          title: 'Delete All Voids',
+          message: 'Are you sure you want to delete all voids? This action cannot be undone.'
+        };
+      case 'media':
+        return {
+          title: 'Delete All Media',
+          message: 'Are you sure you want to delete all media files? This action cannot be undone.'
+        };
+      case 'all':
+        return {
+          title: 'Clear All Data',
+          message: 'Are you sure you want to clear all data? This will delete all voids, messages, users, and media files. This action cannot be undone.'
+        };
+      default:
+        return {
+          title: 'Confirm Delete',
+          message: 'Are you sure you want to proceed with this action?'
+        };
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -307,12 +368,12 @@ export default function AdminDashboard() {
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
-            <Link
-              href="/"
+            <Link 
+              href="/void-space"
               className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
             >
               <ArrowLeftIcon className="w-5 h-5" />
-              Back to Home
+              Return to Void Space
             </Link>
             <h1 className="text-4xl font-bold text-white">Admin Dashboard</h1>
           </div>
@@ -329,7 +390,10 @@ export default function AdminDashboard() {
             <h2 className="text-2xl font-bold text-white mb-2">{stats.voids}</h2>
             <p className="text-gray-400 mb-4">Total Voids</p>
             <button
-              onClick={handleDeleteVoids}
+              onClick={() => {
+                setDeleteType('voids');
+                setShowDeleteModal(true);
+              }}
               disabled={isDeletingVoids}
               className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
@@ -350,7 +414,10 @@ export default function AdminDashboard() {
             <h2 className="text-2xl font-bold text-white mb-2">{stats.messages}</h2>
             <p className="text-gray-400 mb-4">Total Messages</p>
             <button
-              onClick={handleDeleteMessages}
+              onClick={() => {
+                setDeleteType('messages');
+                setShowDeleteModal(true);
+              }}
               disabled={isDeletingMessages}
               className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
@@ -371,7 +438,10 @@ export default function AdminDashboard() {
             <h2 className="text-2xl font-bold text-white mb-2">{stats.users}</h2>
             <p className="text-gray-400 mb-4">Total Users</p>
             <button
-              onClick={handleDeleteUsers}
+              onClick={() => {
+                setDeleteType('users');
+                setShowDeleteModal(true);
+              }}
               disabled={isDeletingUsers}
               className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
@@ -392,7 +462,10 @@ export default function AdminDashboard() {
             <h2 className="text-2xl font-bold text-white mb-2">{stats.media}</h2>
             <p className="text-gray-400 mb-4">Total Media Files</p>
             <button
-              onClick={handleDeleteMedia}
+              onClick={() => {
+                setDeleteType('media');
+                setShowDeleteModal(true);
+              }}
               disabled={isDeletingMedia}
               className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
@@ -417,7 +490,10 @@ export default function AdminDashboard() {
             Warning: These actions cannot be undone. Please be absolutely sure before proceeding.
           </p>
           <button
-            onClick={handleClearAll}
+            onClick={() => {
+              setDeleteType('all');
+              setShowDeleteModal(true);
+            }}
             disabled={isClearingAll}
             className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
           >
@@ -435,6 +511,58 @@ export default function AdminDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-bold text-white">
+                  {getDeleteModalContent().title}
+                </h3>
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+              <p className="text-gray-300 mb-6">
+                {getDeleteModalContent().message}
+              </p>
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  disabled={isDeleting}
+                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 } 
